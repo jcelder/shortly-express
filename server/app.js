@@ -81,6 +81,9 @@ app.post('/links',
 app.post('/signup', (req, res) => {
   return models.Users.create(req.body)
     .then((results) => {
+      return models.Sessions.update({hash: req.session.hash}, {userId: results.insertId})
+    })
+    .then((results) => {
       res.redirect('/');
     })
     .catch((err) => {
@@ -92,25 +95,33 @@ app.post('/login', (req, res) => {
   return models.Users.get({username: req.body.username})
     .then((userRow) => {
       if (userRow === undefined) {
-        res.redirect('/login');
+        throw new Error('Username or Password Not Found');
       } else {
+        req.user = userRow;
         var match = models.Users.compare(req.body.password, userRow.password, userRow.salt);
-        if (match) {
-          console.log(req.cookies);
-          return models.Sessions.update({hash: req.cookies.shortlyid}, {userId: userRow.id})
-            .then((results) => {
-              console.log(results);
-              res.redirect('/');          
-            })
-        } else {
-          throw new Error('username or password not found!');
-        }  
+        return match
       }
+    })
+    .then((match) => {
+      if (match) {
+        return models.Sessions.update({hash: req.session.hash}, {userId: req.user.id})
+      } else {
+        throw new Error('Username or Password Not Found')
+      }  
+    })
+    .then((affectedRows) => {
+      res.redirect('/')
     })
     .catch((err) => {
       res.redirect('/login');
     })
+
 });
+
+app.post('/logout', (req, res) => {
+  return models.Sessions.delete({hash: req.cookies.shortlyid})
+  res.clearCookie('shortlyid').sendStatus(200);
+})
 
 
 /************************************************************/
