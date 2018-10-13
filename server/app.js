@@ -5,6 +5,7 @@ const partials = require('express-partials');
 const bodyParser = require('body-parser');
 const Auth = require('./middleware/auth');
 const models = require('./models');
+const parseCookies = require('./middleware/cookieParser');
 
 const app = express();
 
@@ -14,8 +15,8 @@ app.use(partials());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
-
-
+app.use(parseCookies);
+app.use(Auth.createSession);
 
 app.get('/', 
 (req, res) => {
@@ -77,7 +78,39 @@ app.post('/links',
 /************************************************************/
 // Write your authentication routes here
 /************************************************************/
+app.post('/signup', (req, res) => {
+  return models.Users.create(req.body)
+    .then((results) => {
+      res.redirect('/');
+    })
+    .catch((err) => {
+      res.redirect('/signup');
+    });
+});
 
+app.post('/login', (req, res) => {
+  return models.Users.get({username: req.body.username})
+    .then((userRow) => {
+      if (userRow === undefined) {
+        res.redirect('/login');
+      } else {
+        var match = models.Users.compare(req.body.password, userRow.password, userRow.salt);
+        if (match) {
+          console.log(req.cookies);
+          return models.Sessions.update({hash: req.cookies.shortlyid}, {userId: userRow.id})
+            .then((results) => {
+              console.log(results);
+              res.redirect('/');          
+            })
+        } else {
+          throw new Error('username or password not found!');
+        }  
+      }
+    })
+    .catch((err) => {
+      res.redirect('/login');
+    })
+});
 
 
 /************************************************************/
